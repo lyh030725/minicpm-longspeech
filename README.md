@@ -10,19 +10,24 @@ The default inference path is intentionally **half-duplex streaming**: the bench
 
 ## RunPod target
 
-Target image:
+Use this RunPod image:
 
 ```text
-runpod/pytorch:1.0.7-cu1290-torch291-ubuntu2404
+runpod/pytorch:1.1.0-cu1281-torch280-ubuntu2404-cluster
 ```
 
-The base image ships a newer PyTorch than MiniCPM-o 4.5's documented Transformers streaming stack. This project therefore uses an isolated `uv` environment and pins:
+This matches the MiniCPM-o 4.5 streaming stack much more closely than a PyTorch 2.9 image. The project uses an isolated `uv` environment with:
 
 - Python 3.10
-- `torch==2.8.0`
-- `torchaudio==2.8.0`
+- `torch==2.8.0` from the official PyTorch **cu128** wheel index
+- `torchaudio==2.8.0` from the official PyTorch **cu128** wheel index
 - `transformers==4.51.0`
+- `accelerate==1.12.0`
 - `minicpmo-utils[all]>=1.0.5`
+
+`pyproject.toml` explicitly pins `torch` and `torchaudio` to `https://download.pytorch.org/whl/cu128`, while normal Python dependencies continue to resolve from PyPI. This prevents `uv` from accidentally selecting a CPU wheel or a different CUDA build.
+
+The RunPod image already contains a compatible system PyTorch, but the project deliberately keeps its own `.venv` so the evaluation environment is reproducible and managed entirely by `uv`.
 
 ## Setup
 
@@ -32,7 +37,25 @@ cd minicpm-longspeech
 bash scripts/setup.sh
 ```
 
-Or manually:
+The setup script:
+
+1. installs `uv` if necessary,
+2. installs Python 3.10,
+3. runs `uv sync`,
+4. verifies Python, PyTorch, CUDA build, torchaudio, Transformers, and GPU access.
+
+A successful setup should report values equivalent to:
+
+```text
+Python       : 3.10.x
+PyTorch      : 2.8.0+cu128
+Torch CUDA   : 12.8
+Torchaudio   : 2.8.0+cu128
+Transformers : 4.51.0
+CUDA usable  : True
+```
+
+Or install manually:
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -231,7 +254,12 @@ uv run python run.py --task ASR --max-new-tokens 12000
 
 ### ASR
 
-The runner writes language-wise error rates: CJK languages use CER; other languages use WER. It also records an overall reference-unit-weighted error rate.
+The runner reports:
+
+- Non-CJK overall WER
+- CJK overall CER
+- Overall CER across all languages
+- per-language WER/CER
 
 ### Summarization
 
@@ -278,7 +306,7 @@ uv run python run.py --task ASR --attn-implementation flash_attention_2
 
 Every sample is wrapped independently. Failures are written to the prediction JSONL. Successful earlier samples remain intact. `--resume` skips sample IDs already present in the output.
 
-For a 24 GB GPU, start with one real LongSpeech sample and inspect `peak_vram_allocated_mb`, `peak_vram_reserved_mb`, `prefill_seconds`, and `generation_seconds`.
+LongSpeech inputs are much longer than normal inference prompts, so a GPU with more VRAM than the model's bare loading requirement is strongly preferred. Start with one real sample and inspect `peak_vram_allocated_mb`, `peak_vram_reserved_mb`, `prefill_seconds`, and `generation_seconds` before launching the full evaluation.
 
 ## Reproducibility notes
 

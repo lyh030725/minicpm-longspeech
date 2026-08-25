@@ -5,23 +5,24 @@ description = "Streaming evaluation harness for MiniCPM-o 4.5 on LongSpeech"
 readme = "README.md"
 requires-python = ">=3.10,<3.11"
 dependencies = [
-  "accelerate>=1.2,<2",
+  "accelerate==1.12.0",
   "huggingface-hub[hf-xet]>=0.34,<2",
   "jiwer>=3.1,<5",
   "librosa>=0.10.2,<1",
   "minicpmo-utils[all]>=1.0.5,<2",
-  "numpy>=1.26,<3",
+  "numpy>=2.2,<3",
   "rouge-score>=0.1.2,<1",
-  "soundfile>=0.12,<1",
+  "safetensors>=0.7,<1",
+  "soundfile>=0.12.1,<1",
   "torch==2.8.0",
   "torchaudio==2.8.0",
-  "tqdm>=4.66,<5",
+  "tqdm>=4.67,<5",
   "transformers==4.51.0",
 ]
 
 [project.optional-dependencies]
 judge = ["openai>=1.65,<3"]
-dev = ["pytest>=8,<9", "ruff>=0.9,<1"]
+dev = ["pytest>=8,<10", "ruff>=0.9,<1"]
 
 [project.scripts]
 longspeech-eval = "longspeech_eval.cli:main"
@@ -32,6 +33,18 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/longspeech_eval"]
+
+# RunPod target: CUDA 12.8.1 + PyTorch 2.8.0. Pin torch and torchaudio to
+# PyTorch's cu128 wheel index so uv cannot silently resolve a CPU or another
+# CUDA build while the rest of the project continues to come from PyPI.
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchaudio = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
 
 [tool.ruff]
 line-length = 100

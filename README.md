@@ -310,6 +310,7 @@ LongSpeech inputs are much longer than normal inference prompts, so a GPU with m
 
 ## Reproducibility notes
 
+- Target RunPod image: `runpod/pytorch:1.1.0-cu1281-torch280-ubuntu2404-cluster`.
 - No custom system prompt is added.
 - The LongSpeech user instruction is used verbatim.
 - Sampling is disabled.

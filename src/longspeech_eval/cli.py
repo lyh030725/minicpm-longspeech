@@ -4,7 +4,13 @@ import argparse
 import json
 from pathlib import Path
 
-from .config import DEFAULT_MAX_NEW_TOKENS, SUPPORTED_TASKS, ModelConfig, StreamingConfig
+from .config import (
+    DEFAULT_EVAL_LIMITS,
+    DEFAULT_MAX_NEW_TOKENS,
+    SUPPORTED_TASKS,
+    ModelConfig,
+    StreamingConfig,
+)
 from .judge import judge_temporal_qa
 from .runner import evaluate
 
@@ -25,14 +31,30 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument("--model", default="openbmb/MiniCPM-o-4_5")
     run.add_argument("--device", default="cuda")
     run.add_argument("--dtype", default="bfloat16", choices=["bfloat16", "float16", "float32"])
-    run.add_argument("--attn-implementation", default="sdpa", choices=["sdpa", "flash_attention_2"])
+    run.add_argument(
+        "--attn-implementation",
+        default="sdpa",
+        choices=["sdpa", "flash_attention_2"],
+    )
     run.add_argument("--sample-rate", type=int, default=16_000)
     run.add_argument("--chunk-seconds", type=float, default=1.0)
     run.add_argument("--prompt-position", choices=["before", "after"], default="before")
     run.add_argument("--max-new-tokens", type=int)
     run.add_argument("--start-index", type=int, default=0)
     run.add_argument("--end-index", type=int)
-    run.add_argument("--limit", type=int)
+    run.add_argument(
+        "--limit",
+        type=int,
+        help=(
+            "override the task default sample count; by default ASR uses the first 1000 "
+            "test samples and the other tasks use the full split"
+        ),
+    )
+    run.add_argument(
+        "--all-samples",
+        action="store_true",
+        help="ignore the task-specific default limit and use the full selected range",
+    )
     run.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
 
     judge = subparsers.add_parser("judge-temporal", help="judge Temporal Relative QA outputs")
@@ -51,9 +73,19 @@ def _run(args: argparse.Namespace) -> None:
         raise SystemExit("--chunk-seconds must be > 0")
     if args.sample_rate != 16_000:
         raise SystemExit("MiniCPM-o 4.5 streaming audio input is fixed at 16 kHz.")
+    if args.limit is not None and args.limit <= 0:
+        raise SystemExit("--limit must be > 0")
+    if args.all_samples and args.limit is not None:
+        raise SystemExit("Use either --all-samples or --limit, not both.")
 
     output_path = args.output_root / args.task / f"{args.split}.predictions.jsonl"
     max_new_tokens = args.max_new_tokens or DEFAULT_MAX_NEW_TOKENS[args.task]
+    if args.all_samples:
+        effective_limit = None
+    elif args.limit is not None:
+        effective_limit = args.limit
+    else:
+        effective_limit = DEFAULT_EVAL_LIMITS[args.task]
 
     evaluate(
         task=args.task,
@@ -76,7 +108,7 @@ def _run(args: argparse.Namespace) -> None:
         max_new_tokens=max_new_tokens,
         start_index=args.start_index,
         end_index=args.end_index,
-        limit=args.limit,
+        limit=effective_limit,
         resume=args.resume,
     )
 

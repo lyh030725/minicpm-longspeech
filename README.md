@@ -1,10 +1,10 @@
 # MiniCPM-o 4.5 × LongSpeech
 
-Streaming evaluation harness for **MiniCPM-o 4.5** on the LongSpeech test sets:
+Streaming evaluation harness for **MiniCPM-o 4.5** on LongSpeech:
 
-- `ASR`
-- `summary`
-- `Temporal_Relative_QA`
+- `ASR`: first **1,000** samples from the test split
+- `summary`: **all** test samples
+- `Temporal_Relative_QA`: **all** test samples
 
 The default inference path is intentionally **half-duplex streaming**: the benchmark instruction is prefetched, 16 kHz audio is fed as 1-second chunks through `streaming_prefill()`, and text is produced once at the end through `streaming_generate()`.
 
@@ -46,11 +46,31 @@ For Hugging Face authentication if required:
 export HF_TOKEN=...
 ```
 
-To keep the large model/dataset cache on a RunPod Network Volume:
+To keep the model/dataset cache on a RunPod Network Volume:
 
 ```bash
 export HF_HOME=/workspace/hf_cache
 ```
+
+## Evaluation scope
+
+The project defaults are intentionally task-specific:
+
+| Task | Default test scope |
+|---|---:|
+| ASR | first 1,000 samples |
+| summary | entire split |
+| Temporal_Relative_QA | entire split |
+
+Therefore these commands already use the requested evaluation sizes:
+
+```bash
+uv run python run.py --task ASR --resume
+uv run python run.py --task summary --resume
+uv run python run.py --task Temporal_Relative_QA --resume
+```
+
+`--limit N` overrides the default for a particular run. `--all-samples` disables the task-specific limit, including the ASR 1,000-sample cap.
 
 ## Smoke test first
 
@@ -66,19 +86,13 @@ uv run python run.py --task ASR --limit 10
 
 Predictions are appended sample-by-sample, so a crash/OOM does not discard previous results.
 
-## Full evaluation
-
-```bash
-uv run python run.py --task ASR --resume
-uv run python run.py --task summary --resume
-uv run python run.py --task Temporal_Relative_QA --resume
-```
-
-or:
+## Full requested evaluation
 
 ```bash
 bash scripts/run_all.sh
 ```
+
+This runs ASR top 1,000 plus the full summary and Temporal Relative QA test sets.
 
 Outputs:
 
@@ -98,9 +112,23 @@ Each prediction row includes the reference/prediction plus audio duration, numbe
 
 ## Dataset download behavior
 
-The repository does **not** clone the roughly 2 TB LongSpeech dataset. At runtime it downloads only the task JSONL and resolves referenced WAVs lazily through Hugging Face Hub, reusing the Hub cache.
+The repository does **not** clone the entire LongSpeech dataset. It downloads the task JSONLs and only the referenced WAVs needed for the configured evaluation scope, while reusing the Hugging Face Hub cache.
 
-Pre-download a task:
+To pre-download exactly the requested evaluation set in one command:
+
+```bash
+uv run python scripts/download_data.py
+```
+
+That means:
+
+```text
+ASR                  first 1,000 test WAVs
+summary              all test WAVs
+Temporal_Relative_QA all test WAVs
+```
+
+Download one task only:
 
 ```bash
 uv run python scripts/download_data.py --task summary
@@ -109,13 +137,19 @@ uv run python scripts/download_data.py --task summary
 Metadata only:
 
 ```bash
-uv run python scripts/download_data.py --task ASR --no-audio
+uv run python scripts/download_data.py --no-audio
 ```
 
-Small subset:
+Small subset override:
 
 ```bash
 uv run python scripts/download_data.py --task ASR --limit 10
+```
+
+Full ASR override:
+
+```bash
+uv run python scripts/download_data.py --task ASR --all-samples
 ```
 
 ## Streaming definition
@@ -173,10 +207,11 @@ The selected value is stored in every result row.
 ## Sharding
 
 ```bash
-uv run python run.py --task ASR --start-index 0 --end-index 1000
+uv run python run.py --task ASR --start-index 0 --end-index 500 --output-root outputs/shard0
+uv run python run.py --task ASR --start-index 500 --end-index 1000 --output-root outputs/shard1
 ```
 
-Use separate `--output-root` directories for concurrently running shards, then concatenate JSONL files after completion.
+Use separate output directories for concurrently running shards, then concatenate JSONL files after completion.
 
 ## Generation lengths
 
@@ -232,6 +267,7 @@ Judgments and metrics are saved separately so inference never has to be rerun.
 ```bash
 uv run python run.py --help
 uv run python run.py --task ASR --limit 5
+uv run python run.py --task ASR --all-samples
 uv run python run.py --task summary --no-resume
 uv run python run.py --task ASR --attn-implementation flash_attention_2
 ```

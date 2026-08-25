@@ -9,6 +9,15 @@ DEFAULT_MAX_NEW_TOKENS = {
     "Temporal_Relative_QA": 256,
 }
 
+# Evaluation subset requested for this project:
+# - ASR: first 1,000 samples from the test JSONL
+# - summary / Temporal Relative QA: entire test split
+DEFAULT_EVAL_LIMITS: dict[str, int | None] = {
+    "ASR": 1000,
+    "summary": None,
+    "Temporal_Relative_QA": None,
+}
+
 
 @dataclass(frozen=True)
 class ModelConfig:

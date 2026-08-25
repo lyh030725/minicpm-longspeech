@@ -17,12 +17,15 @@ fi
 # MiniCPM-o 4.5 streaming inference is tested on Python 3.10.
 uv python install 3.10
 
-# pyproject.toml pins torch/torchaudio to PyTorch's cu128 index.
+# pyproject.toml pins torch/torchaudio to PyTorch's cu128 index and keeps
+# MiniCPM-o's audio stack compatible with minicpmo-utils (librosa 0.9 / NumPy <2).
 uv sync
 
 uv run python - <<'PY'
 import sys
 
+import librosa
+import numpy as np
 import torch
 import torchaudio
 import transformers
@@ -32,9 +35,11 @@ print(f"PyTorch      : {torch.__version__}")
 print(f"Torch CUDA   : {torch.version.cuda}")
 print(f"Torchaudio   : {torchaudio.__version__}")
 print(f"Transformers : {transformers.__version__}")
+print(f"NumPy        : {np.__version__}")
+print(f"Librosa      : {librosa.__version__}")
 print(f"CUDA usable  : {torch.cuda.is_available()}")
 if torch.cuda.is_available():
-    print(f"GPU           : {torch.cuda.get_device_name(0)}")
+    print(f"GPU          : {torch.cuda.get_device_name(0)}")
 
 if sys.version_info[:2] != (3, 10):
     raise SystemExit("Expected Python 3.10")
@@ -46,6 +51,10 @@ if not torchaudio.__version__.startswith("2.8.0"):
     raise SystemExit(f"Expected torchaudio 2.8.0, got {torchaudio.__version__}")
 if transformers.__version__ != "4.51.0":
     raise SystemExit(f"Expected transformers 4.51.0, got {transformers.__version__}")
+if librosa.__version__ != "0.9.0":
+    raise SystemExit(f"Expected librosa 0.9.0, got {librosa.__version__}")
+if int(np.__version__.split(".")[0]) >= 2:
+    raise SystemExit(f"Expected NumPy <2 for the MiniCPM audio stack, got {np.__version__}")
 if not torch.cuda.is_available():
     raise SystemExit("PyTorch cannot access the NVIDIA GPU")
 PY
